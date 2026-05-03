@@ -1,0 +1,1075 @@
+import { useState, useEffect, useRef } from "react";
+
+/* ─────────────────────────────────────────────────────────────
+   DESIGN TOKENS
+───────────────────────────────────────────────────────────── */
+const T = {
+  navy:       "#002147",
+  navyDark:   "#001530",
+  navyDeep:   "#000d1f",
+  navyMid:    "#003066",
+  navyBright: "#0a4080",
+  gold:       "#D4AF37",
+  goldLight:  "#e0c45a",
+  goldPale:   "#f0dfa0",
+  goldWash:   "#fdf8e8",
+  white:      "#ffffff",
+  offWhite:   "#fafaf8",
+  stone:      "#f2f0eb",
+  rule:       "#e0ddd5",
+  textDark:   "#0a0e18",
+  textMid:    "#3a3828",
+  textLight:  "#787060",
+};
+
+/* ─────────────────────────────────────────────────────────────
+   GLOBAL STYLES (injected once)
+───────────────────────────────────────────────────────────── */
+const GlobalStyles = () => (
+  <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Jost:wght@200;300;400;500;600&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Jost', system-ui, sans-serif; background: ${T.offWhite}; }
+    a { text-decoration: none; color: inherit; }
+    ::selection { background: ${T.gold}; color: ${T.navyDeep}; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: ${T.offWhite}; }
+    ::-webkit-scrollbar-thumb { background: ${T.navy}; }
+
+    /* ── Fade-in keyframes ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(22px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes shimmer {
+      0%   { background-position: -300% center; }
+      100% { background-position:  300% center; }
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(212,175,55,0.5); }
+      50%      { opacity: 0.6; box-shadow: 0 0 0 5px rgba(212,175,55,0); }
+    }
+    @keyframes rotateSlowly {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    /* ── Utility animation classes ── */
+    .anim-fade-up   { animation: fadeUp 0.65s cubic-bezier(0.22,1,0.36,1) both; }
+    .anim-fade-in   { animation: fadeIn 0.5s ease both; }
+
+    /* ── Hover transitions ── */
+    .hover-lift {
+      transition: transform 0.22s ease, box-shadow 0.22s ease;
+    }
+    .hover-lift:hover {
+      transform: translateY(-3px);
+    }
+
+    /* ── Gold shimmer text ── */
+    .gold-shimmer {
+      background: linear-gradient(
+        90deg,
+        ${T.gold} 0%,
+        ${T.goldLight} 30%,
+        #fff8dc 50%,
+        ${T.goldLight} 70%,
+        ${T.gold} 100%
+      );
+      background-size: 300% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 4s linear infinite;
+    }
+  `}</style>
+);
+
+/* ─────────────────────────────────────────────────────────────
+   SVG ICONS
+───────────────────────────────────────────────────────────── */
+const Icon = ({ id, size = 20, color = "currentColor", strokeWidth = 1.6 }) => {
+  const paths = {
+    creditCard:   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />,
+    calendar:     <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z" />,
+    landmark:     <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" />,
+    mapPin:       <><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></>,
+    chevRight:    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />,
+    arrowRight:   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15m0 0l-6.75-6.75M19.5 12l-6.75 6.75" />,
+    shield:       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />,
+    star:         <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />,
+    menu:         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M12 17.25h8.25" />,
+    x:            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />,
+    fileText:     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />,
+    users:        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />,
+  };
+  return (
+    <svg width={size} height={size} fill="none" viewBox="0 0 24 24"
+         stroke={color} strokeWidth={strokeWidth}>
+      {paths[id]}
+    </svg>
+  );
+};
+
+/* ─────────────────────────────────────────────────────────────
+   REUSABLE: SECTION HEADING
+───────────────────────────────────────────────────────────── */
+const SectionHead = ({ eyebrow, title, sub, light = false, delay = 0 }) => (
+  <div className="anim-fade-up" style={{ animationDelay: `${delay}ms`, textAlign: "center", marginBottom: "3rem" }}>
+    <p style={{
+      fontFamily: "'Jost', sans-serif", fontWeight: 400,
+      fontSize: "0.62rem", letterSpacing: "0.34em", textTransform: "uppercase",
+      color: light ? "rgba(212,175,55,0.7)" : T.gold, marginBottom: "0.7rem",
+    }}>{eyebrow}</p>
+    {/* Gold rule */}
+    <div style={{ width: 36, height: 2, background: T.gold, margin: "0 auto 1.1rem", borderRadius: 2 }} />
+    <h2 style={{
+      fontFamily: "'Libre Baskerville', Georgia, serif", fontWeight: 400,
+      fontSize: "clamp(1.8rem, 4vw, 2.8rem)", lineHeight: 1.15,
+      color: light ? T.white : T.textDark,
+    }}>
+      {title}
+    </h2>
+    {sub && (
+      <p style={{
+        fontFamily: "'Jost', sans-serif", fontWeight: 300,
+        fontSize: "0.9rem", lineHeight: 1.85,
+        color: light ? "rgba(220,215,200,0.72)" : T.textLight,
+        maxWidth: 520, margin: "1rem auto 0",
+      }}>{sub}</p>
+    )}
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────────
+   DATA
+───────────────────────────────────────────────────────────── */
+const QUICK_LINKS = [
+  { icon: "creditCard", title: "Utility Payments",   sub: "Pay your bill online",            cta: "Pay Now",       href: "#" },
+  { icon: "fileText",   title: "Public Records",      sub: "Access city documents",           cta: "View Records",  href: "#" },
+  { icon: "calendar",   title: "City Calendar",       sub: "Events & council meetings",       cta: "View Calendar", href: "#events" },
+  { icon: "landmark",   title: "Contact City Hall",   sub: "Reach Mayor Outlaw's office",     cta: "Get in Touch",  href: "#contact" },
+];
+
+const VISION_PILLARS = [
+  {
+    icon: "users",
+    pillar: "Pillar One",
+    title: "Community First",
+    body: "Mayor Outlaw is committed to governance that puts Johnson County's families at the center of every decision. From neighborhood improvements to youth investment, the Office of the Mayor is a partner — not just a regulator — in Wrightsville's daily life.",
+  },
+  {
+    icon: "landmark",
+    pillar: "Pillar Two",
+    title: "Economic Development",
+    body: "Building a stronger Wrightsville means creating conditions where local businesses can grow and new employers want to invest. Mayor Outlaw is dedicated to reducing barriers, developing infrastructure, and positioning Johnson County as an attractive destination for opportunity.",
+  },
+  {
+    icon: "shield",
+    pillar: "Pillar Three",
+    title: "Safe, Modern City Services",
+    body: "Every resident deserves city services that are efficient, accessible, and secure. Mayor Outlaw is bringing Wrightsville's government into the digital age — modernizing how residents pay, report, and connect with their city without losing the small-community responsiveness that sets Wrightsville apart.",
+  },
+];
+
+const EVENTS = [
+  { month: "JUL", day: "10", tag: "City Council",  title: "Wrightsville City Council Regular Meeting",   loc: "City Hall · 6:00 PM" },
+  { month: "JUL", day: "22", tag: "Community",     title: "Johnson County Downtown Farmers Market",       loc: "Downtown Square · 8:00 AM" },
+  { month: "AUG", day: "07", tag: "Public Works",  title: "Infrastructure & Roads Town Hall",             loc: "Wrightsville Community Center · 5:30 PM" },
+];
+
+/* ─────────────────────────────────────────────────────────────
+   SUB-COMPONENTS
+───────────────────────────────────────────────────────────── */
+
+function QuickCard({ icon, title, sub, cta, href, delay }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <a
+      href={href}
+      className="anim-fade-up"
+      style={{
+        animationDelay: `${delay}ms`,
+        display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
+        padding: "2rem 1.5rem 1.75rem",
+        background: hov ? T.navy : T.white,
+        border: `1px solid ${hov ? T.navy : T.rule}`,
+        borderTop: `3px solid ${hov ? T.gold : T.navy}`,
+        borderRadius: 12,
+        cursor: "pointer",
+        transition: "all 0.25s ease",
+        transform: hov ? "translateY(-4px)" : "translateY(0)",
+        boxShadow: hov ? `0 16px 40px rgba(0,33,71,0.15)` : "0 2px 10px rgba(0,33,71,0.05)",
+      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      {/* Icon badge */}
+      <div style={{
+        width: 52, height: 52, borderRadius: 12,
+        background: hov
+          ? `linear-gradient(135deg, ${T.gold} 0%, ${T.goldLight} 100%)`
+          : `linear-gradient(135deg, ${T.navy} 0%, ${T.navyBright} 100%)`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        marginBottom: "1.1rem",
+        boxShadow: hov ? `0 6px 18px rgba(212,175,55,0.4)` : `0 6px 18px rgba(0,33,71,0.25)`,
+        transition: "all 0.25s ease",
+      }}>
+        <Icon id={icon} size={22} color={hov ? T.navyDeep : "#fff"} strokeWidth={1.7} />
+      </div>
+
+      <span style={{
+        fontFamily: "'Libre Baskerville', Georgia, serif",
+        fontSize: "1.05rem", fontWeight: 700,
+        color: hov ? T.white : T.textDark,
+        lineHeight: 1.2, marginBottom: "0.35rem",
+        transition: "color 0.25s",
+      }}>{title}</span>
+
+      <span style={{
+        fontFamily: "'Jost', sans-serif", fontWeight: 300,
+        fontSize: "0.78rem", color: hov ? "rgba(255,255,255,0.65)" : T.textLight,
+        lineHeight: 1.5, marginBottom: "1.25rem",
+        transition: "color 0.25s",
+      }}>{sub}</span>
+
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        fontFamily: "'Jost', sans-serif", fontWeight: 600,
+        fontSize: "0.62rem", letterSpacing: "0.18em", textTransform: "uppercase",
+        color: hov ? T.gold : T.navy,
+        borderBottom: `1px solid ${hov ? T.gold : T.rule}`,
+        paddingBottom: 2, marginTop: "auto",
+        transition: "all 0.22s",
+      }}>
+        {cta} <Icon id="chevRight" size={11} color={hov ? T.gold : T.navy} strokeWidth={2.5} />
+      </span>
+    </a>
+  );
+}
+
+function VisionCard({ icon, pillar, title, body, delay }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div
+      className="anim-fade-up"
+      style={{
+        animationDelay: `${delay}ms`,
+        background: T.white,
+        border: `1px solid ${T.rule}`,
+        borderTop: `3px solid ${hov ? T.gold : T.navy}`,
+        borderRadius: 12,
+        padding: "2.25rem 2rem",
+        transition: "all 0.25s ease",
+        transform: hov ? "translateY(-5px)" : "translateY(0)",
+        boxShadow: hov ? "0 20px 50px rgba(0,33,71,0.1)" : "0 2px 10px rgba(0,33,71,0.04)",
+      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      {/* Icon badge */}
+      <div style={{
+        width: 52, height: 52, borderRadius: 12,
+        background: `linear-gradient(135deg, ${T.navy} 0%, ${T.navyBright} 100%)`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        marginBottom: "1.5rem",
+        boxShadow: `0 6px 18px rgba(0,33,71,0.28)`,
+        transition: "transform 0.25s ease",
+        transform: hov ? "scale(1.07)" : "scale(1)",
+      }}>
+        <Icon id={icon} size={22} color="#fff" strokeWidth={1.6} />
+      </div>
+
+      <p style={{
+        fontFamily: "'Jost', sans-serif", fontWeight: 600,
+        fontSize: "0.6rem", letterSpacing: "0.22em", textTransform: "uppercase",
+        color: T.gold, marginBottom: "0.5rem",
+      }}>{pillar}</p>
+
+      <h3 style={{
+        fontFamily: "'Libre Baskerville', Georgia, serif",
+        fontSize: "1.25rem", fontWeight: 700,
+        color: T.textDark, lineHeight: 1.25, marginBottom: "0.85rem",
+      }}>{title}</h3>
+
+      <p style={{
+        fontFamily: "'Jost', sans-serif", fontWeight: 300,
+        fontSize: "0.85rem", lineHeight: 1.85, color: T.textLight,
+      }}>{body}</p>
+    </div>
+  );
+}
+
+function EventCard({ month, day, tag, title, loc, delay }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div
+      className="anim-fade-up"
+      style={{
+        animationDelay: `${delay}ms`,
+        background: T.white,
+        border: `1px solid ${T.rule}`,
+        borderRadius: 12, overflow: "hidden",
+        display: "flex", flexDirection: "column",
+        transition: "all 0.25s ease",
+        transform: hov ? "translateY(-4px)" : "translateY(0)",
+        boxShadow: hov ? "0 16px 40px rgba(0,33,71,0.1)" : "0 2px 10px rgba(0,33,71,0.04)",
+      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      {/* Date block */}
+      <div style={{
+        background: `linear-gradient(135deg, ${T.navyDeep} 0%, ${T.navy} 100%)`,
+        padding: "1.25rem 1.5rem",
+        display: "flex", alignItems: "baseline", gap: "0.6rem",
+        borderTop: `3px solid ${T.gold}`,
+      }}>
+        <span style={{
+          fontFamily: "'Jost', sans-serif", fontWeight: 300,
+          fontSize: "0.65rem", letterSpacing: "0.22em", textTransform: "uppercase",
+          color: "rgba(255,255,255,0.6)",
+        }}>{month}</span>
+        <span style={{
+          fontFamily: "'Libre Baskerville', Georgia, serif",
+          fontSize: "2.6rem", fontWeight: 400, color: "#fff", lineHeight: 1,
+        }}>{day}</span>
+        <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.18)", alignSelf: "center" }} />
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: "1.2rem 1.5rem 0.75rem", flex: 1 }}>
+        <p style={{
+          fontFamily: "'Jost', sans-serif", fontWeight: 600,
+          fontSize: "0.58rem", letterSpacing: "0.22em", textTransform: "uppercase",
+          color: T.gold, marginBottom: "0.5rem",
+        }}>{tag}</p>
+        <h3 style={{
+          fontFamily: "'Libre Baskerville', Georgia, serif",
+          fontSize: "1.05rem", fontWeight: 700,
+          color: T.textDark, lineHeight: 1.3, marginBottom: "0.5rem",
+        }}>{title}</h3>
+        <p style={{
+          display: "flex", alignItems: "center", gap: 5,
+          fontFamily: "'Jost', sans-serif", fontWeight: 300,
+          fontSize: "0.75rem", color: T.textLight,
+        }}>
+          <Icon id="mapPin" size={12} color={T.gold} strokeWidth={2} />
+          {loc}
+        </p>
+      </div>
+
+      {/* Learn More */}
+      <div style={{ padding: "0.5rem 1.5rem 1.25rem" }}>
+        <a href="#" style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          fontFamily: "'Jost', sans-serif", fontWeight: 600,
+          fontSize: "0.62rem", letterSpacing: "0.16em", textTransform: "uppercase",
+          color: hov ? T.gold : T.navy,
+          borderBottom: `1px solid ${hov ? T.gold : T.rule}`,
+          paddingBottom: 2, transition: "all 0.2s",
+        }}>
+          Learn More <Icon id="chevRight" size={11} color={hov ? T.gold : T.navy} strokeWidth={2.5} />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MAIN COMPONENT
+───────────────────────────────────────────────────────────── */
+export default function WrightsvilleDigitalOffice() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /* Shared section container style */
+  const section = (bg, pt = "5rem", pb = "5rem") => ({
+    background: bg, padding: `${pt} 1.5rem ${pb}`,
+  });
+  const inner = { maxWidth: 1120, margin: "0 auto" };
+
+  return (
+    <div style={{ fontFamily: "'Jost', system-ui, sans-serif", background: T.offWhite, minHeight: "100svh" }}>
+      <GlobalStyles />
+
+      {/* ══════════════════════════════════════
+          COMMAND BAR — narrow authority strip
+      ══════════════════════════════════════ */}
+      <div style={{
+        background: T.navyDeep,
+        borderBottom: `1px solid rgba(212,175,55,0.2)`,
+        padding: "0.55rem 1.5rem",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        flexWrap: "wrap", gap: "0.5rem",
+      }}>
+        <p style={{
+          fontFamily: "'Jost', sans-serif", fontWeight: 300,
+          fontSize: "0.6rem", letterSpacing: "0.24em", textTransform: "uppercase",
+          color: "rgba(212,175,55,0.65)",
+        }}>
+          Official Digital Office of the Mayor · City of Wrightsville · Johnson County, Georgia
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{
+            width: 6, height: 6, borderRadius: "50%",
+            background: T.gold, animation: "pulse 2.5s ease-in-out infinite",
+          }} />
+          <span style={{
+            fontFamily: "'Jost', sans-serif", fontWeight: 400,
+            fontSize: "0.58rem", letterSpacing: "0.2em", textTransform: "uppercase",
+            color: "rgba(212,175,55,0.7)",
+          }}>Live</span>
+        </div>
+      </div>
+
+
+      {/* ══════════════════════════════════════
+          NAVIGATION
+      ══════════════════════════════════════ */}
+      <nav style={{
+        position: "sticky", top: 0, zIndex: 100,
+        background: scrolled ? "rgba(0,33,71,0.97)" : T.navy,
+        borderBottom: `1px solid ${scrolled ? "rgba(212,175,55,0.18)" : "rgba(212,175,55,0.12)"}`,
+        backdropFilter: scrolled ? "blur(14px)" : "none",
+        boxShadow: scrolled ? "0 2px 30px rgba(0,0,0,0.35)" : "none",
+        padding: scrolled ? "0.85rem 1.5rem" : "1.1rem 1.5rem",
+        transition: "all 0.35s ease",
+      }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+
+          {/* Logo */}
+          <a href="#" style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <span style={{
+              fontFamily: "'Libre Baskerville', Georgia, serif",
+              fontWeight: 700, fontSize: "1rem", color: T.white, lineHeight: 1.2,
+            }}>Mayor Janibeth Outlaw</span>
+            <span style={{
+              fontFamily: "'Jost', sans-serif", fontWeight: 200,
+              fontSize: "0.55rem", letterSpacing: "0.26em", textTransform: "uppercase",
+              color: "rgba(212,175,55,0.65)",
+            }}>Digital Office · Wrightsville, GA</span>
+          </a>
+
+          {/* Desktop links */}
+          <div style={{ display: "flex", alignItems: "center", gap: "2.25rem" }}
+               className="desktop-nav">
+            {[["#vision", "Vision"], ["#events", "Events"], ["#about", "About"], ["#contact", "Contact"]].map(([href, label]) => (
+              <a key={label} href={href} style={{
+                fontFamily: "'Jost', sans-serif", fontWeight: 300,
+                fontSize: "0.72rem", letterSpacing: "0.14em", textTransform: "uppercase",
+                color: "rgba(255,255,255,0.68)", transition: "color 0.2s",
+              }}
+                onMouseEnter={e => e.target.style.color = "#fff"}
+                onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.68)"}
+              >{label}</a>
+            ))}
+            <a href="#" style={{
+              fontFamily: "'Jost', sans-serif", fontWeight: 600,
+              fontSize: "0.68rem", letterSpacing: "0.14em", textTransform: "uppercase",
+              background: `linear-gradient(135deg, ${T.gold}, ${T.goldLight})`,
+              color: T.navyDeep,
+              padding: "0.55rem 1.25rem",
+              display: "flex", alignItems: "center", gap: 5,
+              transition: "all 0.22s",
+              boxShadow: "0 3px 12px rgba(212,175,55,0.3)",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(212,175,55,0.45)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 3px 12px rgba(212,175,55,0.3)"; }}
+            >
+              <Icon id="star" size={12} color={T.navyDeep} strokeWidth={2.5} />
+              Support
+            </a>
+          </div>
+
+          {/* Mobile button */}
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: T.white, padding: 4, display: "none" }}
+            className="mobile-menu-btn"
+            aria-label="Menu"
+          >
+            <Icon id={menuOpen ? "x" : "menu"} size={20} color={T.white} strokeWidth={1.75} />
+          </button>
+        </div>
+
+        {/* Mobile drawer */}
+        {menuOpen && (
+          <div style={{
+            padding: "1.5rem 1.5rem 2rem",
+            display: "flex", flexDirection: "column", gap: "1.25rem",
+            borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: "0.75rem",
+          }}>
+            {[["#vision","Vision"],["#events","Events"],["#about","About"],["#contact","Contact"]].map(([href, label]) => (
+              <a key={label} href={href} onClick={() => setMenuOpen(false)}
+                 style={{ fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.9rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.78)" }}>
+                {label}
+              </a>
+            ))}
+            <a href="#" onClick={() => setMenuOpen(false)}
+               style={{ fontFamily: "'Jost'", fontWeight: 600, fontSize: "0.75rem", letterSpacing: "0.14em", textTransform: "uppercase", background: T.gold, color: T.navyDeep, padding: "0.9rem 1.5rem", textAlign: "center", marginTop: "0.5rem" }}>
+              ★ Support the Vision
+            </a>
+          </div>
+        )}
+      </nav>
+
+      <style>{`
+        @media (max-width: 900px) {
+          .desktop-nav { display: none !important; }
+          .mobile-menu-btn { display: flex !important; }
+        }
+      `}</style>
+
+
+      {/* ══════════════════════════════════════
+          HERO
+      ══════════════════════════════════════ */}
+      <section style={{
+        minHeight: "100svh",
+        background: `
+          radial-gradient(ellipse at 70% 20%, rgba(212,175,55,0.09) 0%, transparent 52%),
+          radial-gradient(ellipse at 10% 80%, rgba(10,64,128,0.25) 0%, transparent 50%),
+          linear-gradient(150deg, ${T.navyDeep} 0%, #001228 28%, #001e42 58%, ${T.navy} 100%)
+        `,
+        position: "relative", overflow: "hidden",
+        display: "flex", alignItems: "center",
+        padding: "6rem 1.5rem 5rem",
+      }}>
+        {/* Cartographic grid */}
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          backgroundImage: `linear-gradient(rgba(212,175,55,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.035) 1px, transparent 1px)`,
+          backgroundSize: "72px 72px",
+        }} />
+
+        {/* Concentric rings — top right */}
+        {[700, 480, 290].map((s, i) => (
+          <div key={i} style={{
+            position: "absolute", top: -s * 0.28, right: -s * 0.28,
+            width: s, height: s, borderRadius: "50%",
+            border: `1px solid rgba(212,175,55,${0.06 + i * 0.02})`,
+            pointerEvents: "none",
+          }} />
+        ))}
+
+        {/* Bottom left ring */}
+        <div style={{
+          position: "absolute", bottom: -120, left: -100,
+          width: 360, height: 360, borderRadius: "50%",
+          border: "1px solid rgba(212,175,55,0.05)", pointerEvents: "none",
+        }} />
+
+        {/* Gold top bar */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: T.gold }} />
+
+        <div style={{ position: "relative", zIndex: 2, maxWidth: 1120, margin: "0 auto", width: "100%" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4rem", alignItems: "center" }}>
+
+            {/* Text side */}
+            <div>
+              {/* Badge */}
+              <div className="anim-fade-up" style={{ animationDelay: "50ms", display: "inline-flex", alignItems: "center", gap: 8, marginBottom: "2rem", padding: "5px 14px 5px 9px", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.28)", borderRadius: 100 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: T.gold, animation: "pulse 2.5s ease-in-out infinite" }} />
+                <span style={{ fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.6rem", letterSpacing: "0.26em", textTransform: "uppercase", color: "rgba(212,175,55,0.8)" }}>
+                  Official Digital Office · Wrightsville, GA
+                </span>
+              </div>
+
+              {/* Headline */}
+              <h1 className="anim-fade-up" style={{
+                animationDelay: "120ms",
+                fontFamily: "'Libre Baskerville', Georgia, serif",
+                fontWeight: 400, fontSize: "clamp(2.2rem, 4.5vw, 3.6rem)",
+                color: T.white, lineHeight: 1.1, marginBottom: "1rem",
+              }}>
+                The Official Digital<br />
+                Office of Mayor<br />
+                <span className="gold-shimmer" style={{ fontWeight: 700, fontStyle: "italic" }}>
+                  Janibeth Outlaw
+                </span>
+              </h1>
+
+              {/* Sub-headline */}
+              <p className="anim-fade-up" style={{
+                animationDelay: "200ms",
+                fontFamily: "'Libre Baskerville', Georgia, serif",
+                fontStyle: "italic", fontSize: "1.15rem",
+                color: "rgba(212,175,55,0.78)", marginBottom: "1.4rem",
+              }}>
+                Serving Wrightsville with Dedication, Vision &amp; Purpose.
+              </p>
+
+              <p className="anim-fade-up" style={{
+                animationDelay: "260ms",
+                fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.88rem",
+                lineHeight: 1.85, color: "rgba(215,210,195,0.76)",
+                maxWidth: 420, marginBottom: "2.5rem",
+              }}>
+                Mayor Janibeth Outlaw leads the City of Wrightsville with a commitment to transparent governance, economic opportunity, and the kind of responsive city services every Johnson County family deserves.
+              </p>
+
+              {/* CTAs */}
+              <div className="anim-fade-up" style={{ animationDelay: "320ms", display: "flex", flexDirection: "column", gap: "0.7rem", maxWidth: 420 }}>
+                <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap" }}>
+                  {/* Primary */}
+                  <a href="#quick-links" style={{
+                    flex: 1, minWidth: 160,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    background: T.gold, color: T.navyDeep,
+                    fontFamily: "'Jost'", fontWeight: 700, fontSize: "0.72rem",
+                    letterSpacing: "0.14em", textTransform: "uppercase",
+                    padding: "0.95rem 1.5rem",
+                    boxShadow: "0 6px 22px rgba(212,175,55,0.38)",
+                    transition: "all 0.22s ease",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.background = T.goldLight; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 10px 30px rgba(212,175,55,0.5)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = T.gold; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 6px 22px rgba(212,175,55,0.38)"; }}
+                  >
+                    Access City Services
+                    <Icon id="arrowRight" size={15} color={T.navyDeep} strokeWidth={2.5} />
+                  </a>
+
+                  {/* Secondary */}
+                  <a href="#" style={{
+                    flex: 1, minWidth: 160,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    background: "transparent", color: "rgba(255,255,255,0.78)",
+                    fontFamily: "'Jost'", fontWeight: 500, fontSize: "0.72rem",
+                    letterSpacing: "0.14em", textTransform: "uppercase",
+                    padding: "0.95rem 1.5rem",
+                    border: "1px solid rgba(255,255,255,0.22)",
+                    transition: "all 0.2s ease",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = T.gold; e.currentTarget.style.color = T.gold; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.22)"; e.currentTarget.style.color = "rgba(255,255,255,0.78)"; }}
+                  >
+                    <Icon id="star" size={13} strokeWidth={2} />
+                    Support the Vision
+                  </a>
+                </div>
+
+                <a href="#about" style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", color: "rgba(255,255,255,0.5)",
+                  fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.72rem",
+                  letterSpacing: "0.14em", textTransform: "uppercase",
+                  padding: "0.7rem",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  transition: "all 0.2s ease",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.5)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; }}
+                >
+                  Meet Mayor Outlaw
+                </a>
+              </div>
+
+              {/* Stats */}
+              <div className="anim-fade-up" style={{
+                animationDelay: "400ms",
+                display: "flex", alignItems: "center", gap: "2rem",
+                marginTop: "3rem", paddingTop: "2rem",
+                borderTop: "1px solid rgba(255,255,255,0.08)",
+              }}>
+                {[["3", "Pillars"], ["24/7", "City Access"], ["∞", "Commitment"]].map(([val, lbl], i) => (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                    <span style={{ fontFamily: "'Libre Baskerville'", fontSize: "1.8rem", fontWeight: 400, color: T.white, lineHeight: 1 }}>{val}</span>
+                    <span style={{ fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.55rem", letterSpacing: "0.22em", textTransform: "uppercase", color: "rgba(212,175,55,0.5)", marginTop: 4 }}>{lbl}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Photo frame */}
+            <div className="anim-fade-up" style={{ animationDelay: "180ms", display: "flex", justifyContent: "flex-end" }}>
+              <div style={{
+                width: "100%", maxWidth: 340,
+                aspectRatio: "3/4",
+                background: `linear-gradient(145deg, ${T.navy}, ${T.navyDeep})`,
+                border: `1.5px solid rgba(212,175,55,0.35)`,
+                boxShadow: `0 0 0 8px rgba(212,175,55,0.06), 0 0 0 18px rgba(212,175,55,0.03), 0 40px 100px rgba(0,0,0,0.5)`,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                position: "relative", overflow: "hidden",
+              }}>
+                {/* ── REPLACE with actual photo:
+                    <img src="images/mayor-janibeth-outlaw.jpg"
+                         alt="Mayor Janibeth Outlaw"
+                         style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"top" }} />
+                ── */}
+                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: 64, height: 64, color: "rgba(212,175,55,0.3)", opacity: 0.5 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={0.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+                <span style={{ fontFamily: "'Jost'", fontWeight: 200, fontSize: "0.6rem", letterSpacing: "0.22em", textTransform: "uppercase", color: "rgba(212,175,55,0.4)", marginTop: 8 }}>Official Photo</span>
+
+                {/* Nameplate gradient overlay */}
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "6rem", background: "linear-gradient(to top, rgba(0,13,31,0.92), transparent)" }} />
+                <div style={{ position: "absolute", bottom: "1.25rem", left: 0, right: 0, textAlign: "center" }}>
+                  <div style={{ fontFamily: "'Libre Baskerville'", fontSize: "1rem", color: T.white, fontWeight: 400 }}>Janibeth Outlaw</div>
+                  <div style={{ fontFamily: "'Jost'", fontSize: "0.58rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "rgba(212,175,55,0.65)", marginTop: 3 }}>Mayor · Wrightsville, Georgia</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Bottom fade */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "5rem", background: `linear-gradient(to top, ${T.offWhite}, transparent)`, pointerEvents: "none" }} />
+      </section>
+
+
+      {/* ══════════════════════════════════════
+          QUICK LINKS GRID
+      ══════════════════════════════════════ */}
+      <section id="quick-links" style={{ ...section(T.white, "3.5rem", "3.5rem"), borderBottom: `1px solid ${T.rule}` }}>
+        <div style={inner}>
+          <p style={{ fontFamily: "'Jost'", fontWeight: 400, fontSize: "0.62rem", letterSpacing: "0.3em", textTransform: "uppercase", color: T.navy, textAlign: "center", marginBottom: "2rem" }}>
+            City Services
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: "1rem" }}>
+            <style>{`@media(max-width:900px){#ql-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}@media(max-width:480px){#ql-grid{grid-template-columns:1fr!important;}}`}</style>
+            <div id="ql-grid" style={{ display: "contents" }}>
+              {QUICK_LINKS.map((card, i) => (
+                <QuickCard key={card.title} {...card} delay={i * 60} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ══════════════════════════════════════
+          EVENTS
+      ══════════════════════════════════════ */}
+      <section id="events" style={section(T.stone)}>
+        <div style={inner}>
+          <SectionHead
+            eyebrow="What's Happening"
+            title={<>Upcoming in <em style={{ color: T.navy, fontStyle: "italic" }}>Wrightsville</em></>}
+            sub="Stay connected with your city — meetings, community events, and public forums for Johnson County residents."
+          />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: "1.25rem" }}>
+            <style>{`@media(max-width:860px){#ev-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}@media(max-width:560px){#ev-grid{grid-template-columns:1fr!important;}}`}</style>
+            <div id="ev-grid" style={{ display: "contents" }}>
+              {EVENTS.map((ev, i) => (
+                <EventCard key={ev.title} {...ev} delay={i * 80} />
+              ))}
+            </div>
+          </div>
+          {/* View All */}
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "2.5rem" }}>
+            <a href="#" style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              fontFamily: "'Jost'", fontWeight: 600, fontSize: "0.68rem",
+              letterSpacing: "0.16em", textTransform: "uppercase",
+              color: T.navy, border: `1px solid ${T.rule}`,
+              padding: "0.75rem 2rem", transition: "all 0.2s ease",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = T.navy; e.currentTarget.style.color = T.white; e.currentTarget.style.borderColor = T.navy; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.navy; e.currentTarget.style.borderColor = T.rule; }}
+            >
+              View Full Calendar <Icon id="arrowRight" size={14} strokeWidth={2} />
+            </a>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ══════════════════════════════════════
+          STRATEGIC VISION
+      ══════════════════════════════════════ */}
+      <section id="vision" style={section(T.white)}>
+        <div style={inner}>
+          <SectionHead
+            eyebrow="A Clear Agenda for Wrightsville"
+            title={<>The <em style={{ color: T.navy, fontStyle: "italic" }}>Strategic Vision</em></>}
+            sub="Three focused pillars — each built around the real needs of Wrightsville's families, businesses, and neighborhoods."
+          />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: "1.25rem" }}>
+            <style>{`@media(max-width:860px){#vp-grid{grid-template-columns:1fr!important;}}`}</style>
+            <div id="vp-grid" style={{ display: "contents" }}>
+              {VISION_PILLARS.map((p, i) => (
+                <VisionCard key={p.title} {...p} delay={100 + i * 80} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ══════════════════════════════════════
+          ABOUT — dark navy section
+      ══════════════════════════════════════ */}
+      <section id="about" style={{
+        background: `
+          radial-gradient(ellipse at 80% 10%, rgba(212,175,55,0.08) 0%, transparent 55%),
+          linear-gradient(160deg, ${T.navyDeep} 0%, #001228 55%, ${T.navy} 100%)
+        `,
+        padding: "6rem 1.5rem",
+        position: "relative", overflow: "hidden",
+      }}>
+        {/* Subtle grid */}
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          backgroundImage: `linear-gradient(rgba(212,175,55,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(212,175,55,0.03) 1px, transparent 1px)`,
+          backgroundSize: "60px 60px",
+        }} />
+
+        <div style={{ ...inner, position: "relative", zIndex: 2, display: "grid", gridTemplateColumns: "360px 1fr", gap: "5rem", alignItems: "start" }}>
+          <style>{`@media(max-width:900px){#about-grid{grid-template-columns:1fr!important;gap:2.5rem!important;}}`}</style>
+          <div id="about-grid" style={{ display: "contents" }}>
+
+            {/* Left: portrait + namecard */}
+            <div className="anim-fade-up" style={{ animationDelay: "60ms" }}>
+              {/* Portrait */}
+              <div style={{
+                background: `linear-gradient(145deg, ${T.navy}, ${T.navyDeep})`,
+                border: `1.5px solid rgba(212,175,55,0.32)`,
+                boxShadow: `0 0 0 8px rgba(212,175,55,0.05), 0 40px 100px rgba(0,0,0,0.5)`,
+                aspectRatio: "3/4", display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center",
+                position: "relative", overflow: "hidden", marginBottom: "1.25rem",
+              }}>
+                {/* ── REPLACE with: <img src="..." alt="Mayor Janibeth Outlaw" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"top"}} /> ── */}
+                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: 56, height: 56, color: "rgba(212,175,55,0.28)", opacity: 0.5 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={0.75}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "6rem", background: "linear-gradient(to top, rgba(0,13,31,0.92), transparent)" }} />
+              </div>
+
+              {/* Name card */}
+              <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "1.2rem 1.4rem" }}>
+                <div style={{ width: 32, height: 2, background: T.gold, marginBottom: "0.85rem" }} />
+                <p style={{ fontFamily: "'Jost'", fontWeight: 200, fontSize: "0.6rem", letterSpacing: "0.26em", textTransform: "uppercase", color: "rgba(212,175,55,0.6)", marginBottom: 4 }}>Mayor · Wrightsville, Georgia</p>
+                <h3 style={{ fontFamily: "'Libre Baskerville'", fontSize: "1.3rem", fontWeight: 700, color: T.white }}>Janibeth Outlaw</h3>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.85rem" }}>
+                  {["Wrightsville Native", "Public Servant"].map(tag => (
+                    <span key={tag} style={{ fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.58rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(212,175,55,0.65)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 100, padding: "3px 10px" }}>{tag}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: bio */}
+            <div className="anim-fade-up" style={{ animationDelay: "140ms" }}>
+              <p style={{ fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.6rem", letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(212,175,55,0.65)", marginBottom: "1.25rem" }}>About Mayor Outlaw</p>
+              <h2 style={{ fontFamily: "'Libre Baskerville'", fontWeight: 400, fontSize: "clamp(1.8rem,3.5vw,2.75rem)", color: T.white, lineHeight: 1.15, marginBottom: "2rem" }}>
+                Rooted in Wrightsville.<br />
+                <em style={{ color: T.gold }}>Committed to Its Future.</em>
+              </h2>
+
+              {/* ── EDIT: Replace with Mayor Outlaw's actual biography ── */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+                {[
+                  "Mayor Janibeth Outlaw is a dedicated public servant whose leadership is defined by genuine commitment to the people of Wrightsville, Georgia. As the proud seat of Johnson County, Wrightsville carries the character of a close-knit community built on hard work and mutual responsibility — and Mayor Outlaw leads with that spirit at the forefront of every decision.",
+                  "With a background in [insert field — e.g., public administration, education, community development], Mayor Outlaw brings years of experience and an unwavering dedication to accessible, transparent governance. Her door is always open, and her approach to city leadership is grounded in the simple belief that government should work visibly and honestly for the people it serves.",
+                  "From modernizing city services to investing in economic development and community safety, Mayor Outlaw is committed to ensuring that Wrightsville — and every family who calls it home — has every opportunity to thrive in the decades ahead.",
+                ].map((para, i) => (
+                  <p key={i} style={{ fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.875rem", lineHeight: 1.9, color: "rgba(215,210,195,0.78)" }}>{para}</p>
+                ))}
+              </div>
+
+              {/* CTA buttons */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginTop: "2.5rem" }}>
+                <a href="#contact" style={{
+                  display: "inline-flex", alignItems: "center", gap: 7,
+                  fontFamily: "'Jost'", fontWeight: 700, fontSize: "0.68rem",
+                  letterSpacing: "0.14em", textTransform: "uppercase",
+                  background: T.gold, color: T.navyDeep,
+                  padding: "0.85rem 1.75rem",
+                  boxShadow: "0 4px 18px rgba(212,175,55,0.35)",
+                  transition: "all 0.22s",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = T.goldLight; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = T.gold; e.currentTarget.style.transform = "translateY(0)"; }}
+                >
+                  Get Involved
+                </a>
+                <a href="#" style={{
+                  display: "inline-flex", alignItems: "center", gap: 7,
+                  fontFamily: "'Jost'", fontWeight: 500, fontSize: "0.68rem",
+                  letterSpacing: "0.14em", textTransform: "uppercase",
+                  background: "transparent", color: "rgba(255,255,255,0.65)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  padding: "0.85rem 1.75rem",
+                  transition: "all 0.2s",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = T.gold; e.currentTarget.style.color = T.gold; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)"; e.currentTarget.style.color = "rgba(255,255,255,0.65)"; }}
+                >
+                  ★ Support the Vision
+                </a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+
+      {/* ══════════════════════════════════════
+          CONTACT
+      ══════════════════════════════════════ */}
+      <section id="contact" style={section(T.offWhite, "6rem", "6rem")}>
+        <div style={{ ...inner, maxWidth: 640 }}>
+          <SectionHead
+            eyebrow="We Are Listening"
+            title={<>Get in <em style={{ color: T.navy, fontStyle: "italic" }}>Touch</em></>}
+            sub="Questions, concerns, or ideas for Wrightsville — Mayor Outlaw's office is always ready to hear from you."
+            delay={0}
+          />
+
+          <div className="anim-fade-up" style={{
+            animationDelay: "100ms",
+            background: T.white, border: `1px solid ${T.rule}`,
+            borderRadius: 14, padding: "2.5rem",
+            boxShadow: "0 8px 40px rgba(0,33,71,0.08)",
+          }}>
+            <form action="https://api.staticforms.dev/submit" method="POST">
+              <input type="hidden" name="apiKey" value="sf_135631e4fa88dff3c6a2eb58" />
+              {/* ── EDIT: Replace with your Vercel deployment URL ── */}
+              <input type="hidden" name="redirectTo" value="https://YOUR-VERCEL-URL.vercel.app" />
+              <input type="hidden" name="subject" value="New Contact from Mayor Outlaw Official Site" />
+              <input type="text" name="honeypot" style={{ display: "none" }} tabIndex={-1} autoComplete="off" />
+
+              {/* Row 1 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.1rem", marginBottom: "1.1rem" }}>
+                <style>{`@media(max-width:560px){#cf-row1{grid-template-columns:1fr!important;}}`}</style>
+                <div id="cf-row1" style={{ display: "contents" }}>
+                  {[["name", "Full Name", "text", "Jane Doe"], ["email", "Email Address", "email", "jane@email.com"]].map(([id, label, type, ph]) => (
+                    <div key={id}>
+                      <label htmlFor={id} style={{ display: "block", fontFamily: "'Jost'", fontWeight: 500, fontSize: "0.6rem", letterSpacing: "0.22em", textTransform: "uppercase", color: T.textDark, marginBottom: "0.45rem" }}>{label}</label>
+                      <input type={type} id={id} name={id} required placeholder={ph} style={{
+                        width: "100%", background: T.offWhite, border: `1.5px solid ${T.rule}`,
+                        color: T.textDark, fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.875rem",
+                        padding: "0.78rem 1rem", outline: "none", borderRadius: 6,
+                        transition: "border-color 0.2s, box-shadow 0.2s",
+                      }}
+                        onFocus={e => { e.target.style.borderColor = T.navy; e.target.style.boxShadow = `0 0 0 3px rgba(0,33,71,0.1)`; }}
+                        onBlur={e => { e.target.style.borderColor = T.rule; e.target.style.boxShadow = "none"; }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div style={{ marginBottom: "1.1rem" }}>
+                <label htmlFor="phone" style={{ display: "block", fontFamily: "'Jost'", fontWeight: 500, fontSize: "0.6rem", letterSpacing: "0.22em", textTransform: "uppercase", color: T.textDark, marginBottom: "0.45rem" }}>
+                  Phone <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 300, fontSize: "0.72rem", color: T.textLight }}>(optional)</span>
+                </label>
+                <input type="tel" id="phone" name="phone" placeholder="(478) 555-0100" style={{
+                  width: "100%", background: T.offWhite, border: `1.5px solid ${T.rule}`,
+                  color: T.textDark, fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.875rem",
+                  padding: "0.78rem 1rem", outline: "none", borderRadius: 6, transition: "border-color 0.2s",
+                }}
+                  onFocus={e => { e.target.style.borderColor = T.navy; e.target.style.boxShadow = `0 0 0 3px rgba(0,33,71,0.1)`; }}
+                  onBlur={e => { e.target.style.borderColor = T.rule; e.target.style.boxShadow = "none"; }}
+                />
+              </div>
+
+              {/* Subject */}
+              <div style={{ marginBottom: "1.1rem" }}>
+                <label htmlFor="subject" style={{ display: "block", fontFamily: "'Jost'", fontWeight: 500, fontSize: "0.6rem", letterSpacing: "0.22em", textTransform: "uppercase", color: T.textDark, marginBottom: "0.45rem" }}>Subject</label>
+                <input type="text" id="subject" name="subject" required placeholder="e.g., Road repair request or community idea" style={{
+                  width: "100%", background: T.offWhite, border: `1.5px solid ${T.rule}`,
+                  color: T.textDark, fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.875rem",
+                  padding: "0.78rem 1rem", outline: "none", borderRadius: 6, transition: "border-color 0.2s",
+                }}
+                  onFocus={e => { e.target.style.borderColor = T.navy; e.target.style.boxShadow = `0 0 0 3px rgba(0,33,71,0.1)`; }}
+                  onBlur={e => { e.target.style.borderColor = T.rule; e.target.style.boxShadow = "none"; }}
+                />
+              </div>
+
+              {/* Message */}
+              <div style={{ marginBottom: "1.75rem" }}>
+                <label htmlFor="message" style={{ display: "block", fontFamily: "'Jost'", fontWeight: 500, fontSize: "0.6rem", letterSpacing: "0.22em", textTransform: "uppercase", color: T.textDark, marginBottom: "0.45rem" }}>Your Message</label>
+                <textarea id="message" name="message" required rows={5} placeholder="Share your thoughts, concerns, or ideas for Wrightsville..." style={{
+                  width: "100%", background: T.offWhite, border: `1.5px solid ${T.rule}`,
+                  color: T.textDark, fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.875rem",
+                  padding: "0.78rem 1rem", outline: "none", borderRadius: 6, resize: "none", transition: "border-color 0.2s",
+                }}
+                  onFocus={e => { e.target.style.borderColor = T.navy; e.target.style.boxShadow = `0 0 0 3px rgba(0,33,71,0.1)`; }}
+                  onBlur={e => { e.target.style.borderColor = T.rule; e.target.style.boxShadow = "none"; }}
+                />
+              </div>
+
+              <button type="submit" style={{
+                width: "100%", padding: "1rem",
+                background: T.navy, color: T.white,
+                fontFamily: "'Jost'", fontWeight: 600, fontSize: "0.72rem",
+                letterSpacing: "0.2em", textTransform: "uppercase",
+                border: "none", cursor: "pointer", borderRadius: 6,
+                transition: "background 0.22s, transform 0.18s",
+                boxShadow: "0 4px 18px rgba(0,33,71,0.3)",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = T.navyBright; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = T.navy; e.currentTarget.style.transform = "translateY(0)"; }}
+              >
+                Send Message
+              </button>
+
+              <p style={{ fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.68rem", color: T.textLight, textAlign: "center", marginTop: "1rem" }}>
+                Your information is kept confidential and used solely to respond to your inquiry.
+              </p>
+            </form>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ══════════════════════════════════════
+          FOOTER
+      ══════════════════════════════════════ */}
+      <footer style={{ background: T.navyDeep, borderTop: `3px solid ${T.gold}`, padding: "3rem 1.5rem" }}>
+        <div style={{ ...inner, display: "flex", flexDirection: "column", alignItems: "center", gap: "1.5rem", textAlign: "center" }}>
+
+          {/* Wordmark */}
+          <div>
+            <div style={{ fontFamily: "'Libre Baskerville'", fontSize: "1.15rem", fontWeight: 700, color: T.white }}>Mayor Janibeth Outlaw</div>
+            <div style={{ fontFamily: "'Jost'", fontWeight: 200, fontSize: "0.58rem", letterSpacing: "0.24em", textTransform: "uppercase", color: "rgba(212,175,55,0.5)", marginTop: 4 }}>
+              Official Digital Office · Wrightsville, Georgia
+            </div>
+          </div>
+
+          {/* Footer nav */}
+          <div style={{ display: "flex", alignItems: "center", gap: "1.75rem", flexWrap: "wrap", justifyContent: "center" }}>
+            {[["#vision","Vision"],["#events","Events"],["#about","About"],["#contact","Contact"]].map(([href, label]) => (
+              <a key={label} href={href} style={{ fontFamily: "'Jost'", fontWeight: 300, fontSize: "0.62rem", letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.38)", transition: "color 0.2s" }}
+                 onMouseEnter={e => e.target.style.color = "#fff"}
+                 onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.38)"}>
+                {label}
+              </a>
+            ))}
+            <a href="#" style={{ fontFamily: "'Jost'", fontWeight: 600, fontSize: "0.62rem", letterSpacing: "0.16em", textTransform: "uppercase", color: T.gold, transition: "color 0.2s" }}
+               onMouseEnter={e => e.target.style.color = T.goldLight}
+               onMouseLeave={e => e.target.style.color = T.gold}>
+              ★ Support the Vision
+            </a>
+          </div>
+
+          {/* Legal */}
+          <p style={{ fontFamily: "'Jost'", fontWeight: 200, fontSize: "0.65rem", lineHeight: 1.7, color: "rgba(200,190,160,0.35)" }}>
+            Paid for by the Janibeth Outlaw Campaign · [Campaign Treasurer Name], Treasurer<br />
+            [Campaign Mailing Address] · Wrightsville, Georgia · [Zip Code]<br />
+            <span style={{ opacity: 0.6 }}>&copy; 2025 Janibeth Outlaw Campaign. All rights reserved.</span>
+          </p>
+        </div>
+      </footer>
+
+    </div>
+  );
+}
